@@ -8,7 +8,3 @@ In my spare time, I am mostly adding new skills to my repertoire and sometimes o
 ![GitHub stats](https://github-readme-stats.vercel.app/api?username=allanice001&show_icons=true&count_private=true&hide=contribs)
 
 ![GitHub streak stats](https://github-readme-streak-stats.herokuapp.com/?user=allanice001)
-
-![Profile views](https://gpvc.arturio.dev/allanice001)
-
-![GitHub Snake](https://raw.githubusercontent.com/allanice001/allanice001/refs/heads/output/github-snake-dark.svg)
