@@ -1,9 +1,0 @@
-name: Dispatch Test
-on:
-  workflow_dispatch:
-
-jobs:
-  ok:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Manual dispatch works ✅"
