@@ -15,13 +15,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Build image URL (prefer stable API) + cache-bust
+      - name: Build image URL (prefer stable API) + cache-bust + debug
         id: prep
         run: |
+          set -euo pipefail
           OWNER="${{ github.repository_owner }}"
           TS="$(date -u +%Y%m%d%H%M%S)"
 
-          # Prefer the stable query endpoint first:
           candidates=(
             "https://github-contributions.vercel.app/api?username=${OWNER}&format=svg&theme=tokyo-night"
             "https://github-contributions.vercel.app/${OWNER}.svg"
@@ -29,28 +29,30 @@ jobs:
             "https://github-contributions.vercel.app/api/v1/${OWNER}?format=svg"
           )
 
-          IMG_URL=""
           for u in "${candidates[@]}"; do
-            if curl -sIfL "$u" >/dev/null 2>&1; then
+            echo "Probing: $u"
+            code=$(curl -s -o /tmp/resp -w "%{http_code}" -L "$u" || true)
+            head -c 200 /tmp/resp || true; echo
+            if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
               IMG_URL="$u"
               break
             fi
           done
 
-          if [ -z "$IMG_URL" ]; then
+          if [ -z "${IMG_URL:-}" ]; then
             echo "Could not resolve a working endpoint" >&2
             exit 1
           fi
 
-          # Cache-bust (preserve any existing query params)
           if [[ "$IMG_URL" == *\?* ]]; then
             IMG_URL="${IMG_URL}&timestamp=${TS}"
           else
             IMG_URL="${IMG_URL}?timestamp=${TS}"
           fi
-
+          echo "Using IMG_URL=$IMG_URL"
           echo "IMG_URL=$IMG_URL" >> $GITHUB_ENV
           echo "OWNER=$OWNER" >> $GITHUB_ENV
+
 
       - name: Ensure contrib section exists (auto-insert if missing)
         run: |
