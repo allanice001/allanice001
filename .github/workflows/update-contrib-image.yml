@@ -95,8 +95,8 @@ jobs:
           const END   = '<!--END_SECTION:contrib-image-->';
           const ts = new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14);
           const snippet = `${START}
-<img src="contrib.svg?ts=${ts}" alt="Contributions" />
-${END}`;
+          <img src="contrib.svg?ts=${ts}" alt="Contributions" />
+          ${END}`;
 
           let readme = '';
           try { readme = fs.readFileSync('README.md', 'utf8'); } catch {}
@@ -105,11 +105,11 @@ ${END}`;
           if (!readme.includes(START) || !readme.includes(END)) {
             readme += `
 
-### 🗺️ Contributions
+          ### 🗺️ Contributions
 
-${snippet}
+          ${snippet}
 
-`;
+          `;
           } else {
             const pattern = new RegExp(`${START}[\\s\\S]*?${END}`, 'm');
             readme = readme.replace(pattern, snippet);
