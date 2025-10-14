@@ -51,6 +51,7 @@ In my spare time, I’m usually:
 </p>
 
 <!--START_SECTION:contrib-image-->
+[![allanice001's contribution graph](https://github-contributions.vercel.app/api/v1/allanice001.svg?timestamp=20251014140428)](https://github-contributions.vercel.app/api/v1/allanice001.svg?timestamp=20251014140428)
 <!--END_SECTION:contrib-image-->
 
 ---
