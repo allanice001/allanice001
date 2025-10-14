@@ -16,7 +16,7 @@ jobs:
 
       # Generate SVG with GitHub GraphQL (no external service)
       - name: Flush Cache
-        uses: kevincobain2000/action-camo-purge@v1
+        uses: kevincobain2000/action-camo-purge@0b70f4d64c9828aace7bbbf1931a646957734ef3 # v1
 
       - name: Generate contrib.svg
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
