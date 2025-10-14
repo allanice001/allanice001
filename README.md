@@ -47,7 +47,7 @@ In my spare time, I’m usually:
 ### 🗺️ Contributions
 
 <p align="center">
-  <img src="https://github-contributions.vercel.app/api/v1/allanice001?format=svg&theme=tokyo-night&timestamp=$(date +%s)" alt="allanice001's contribution graph" />
+  <img src="https://github-contributions.vercel.app/api/v1/allanice001?format=svg&theme=tokyo-night" alt="allanice001's contribution graph" />
 </p>
 
 <!--START_SECTION:contrib-image-->
