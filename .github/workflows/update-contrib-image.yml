@@ -2,95 +2,107 @@ name: Update contribution image in README
 
 on:
   schedule:
-    - cron: "13 08 * * *" # daily ~08:13 UTC
+    - cron: "13 08 * * *" # daily at ~08:13 UTC
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  update-readme:
+  render-graphql:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Build image URL (prefer stable API) + cache-bust + debug
-        id: prep
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate SVG from GitHub GraphQL (includes private if your token can see them)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # default repo token; replace with PAT if you need wider access
+          USERNAME: ${{ github.repository_owner }}
+        run: |
+          cat > script.mjs << 'EOF'
+          import fs from 'node:fs/promises';
+
+          const query = `
+          query($login:String!) {
+            user(login:$login) {
+              contributionsCollection {
+                contributionCalendar {
+                  totalContributions
+                  weeks {
+                    contributionDays { color contributionCount date }
+                  }
+                }
+              }
+            }
+          }`;
+
+          const resp = await fetch('https://api.github.com/graphql', {
+            method: 'POST',
+            headers: {
+              'Authorization': `bearer ${process.env.GH_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query, variables: { login: process.env.USERNAME }})
+          });
+
+          if (!resp.ok) {
+            const text = await resp.text();
+            throw new Error(`GraphQL HTTP ${resp.status}: ${text}`);
+          }
+
+          const json = await resp.json();
+          if (json.errors) throw new Error(JSON.stringify(json.errors, null, 2));
+
+          const weeks = json.data.user.contributionsCollection.contributionCalendar.weeks;
+
+          // --- SVG layout (simple GitHub-like heatmap) ---
+          const CELL = 11, GAP = 2; // px
+          const cols = weeks.length, rows = 7;
+          const width = cols * (CELL + GAP) + GAP;
+          const height = rows * (CELL + GAP) + GAP;
+
+          const rects = [];
+          weeks.forEach((w, x) => {
+            w.contributionDays.forEach((d, y) => {
+              const cx = GAP + x * (CELL + GAP);
+              const cy = GAP + y * (CELL + GAP);
+              // GitHub provides a color per day; fallback to GitHub's empty color
+              const color = d.color || '#ebedf0';
+              rects.push(
+                `<rect x="${cx}" y="${cy}" width="${CELL}" height="${CELL}" rx="2" ry="2" fill="${color}">` +
+                `<title>${d.date}: ${d.contributionCount} contributions</title>` +
+                `</rect>`
+              );
+            });
+          });
+
+          const svg = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+            <rect width="100%" height="100%" fill="transparent"/>
+            ${rects.join('\n')}
+          </svg>`.trim();
+
+          await fs.writeFile('contrib.svg', svg, 'utf8');
+          EOF
+
+          node script.mjs
+
+      - name: Ensure contrib markers exist, then inject the image
         run: |
           set -euo pipefail
-          OWNER="${{ github.repository_owner }}"
-          TS="$(date -u +%Y%m%d%H%M%S)"
-
-          candidates=(
-            "https://github-contributions.vercel.app/api?username=${OWNER}&format=svg&theme=tokyo-night"
-            "https://github-contributions.vercel.app/${OWNER}.svg"
-            "https://github-contributions.vercel.app/api/v1/${OWNER}.svg"
-            "https://github-contributions.vercel.app/api/v1/${OWNER}?format=svg"
-          )
-
-          for u in "${candidates[@]}"; do
-            echo "Probing: $u"
-            code=$(curl -s -o /tmp/resp -w "%{http_code}" -L "$u" || true)
-            head -c 200 /tmp/resp || true; echo
-            if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
-              IMG_URL="$u"
-              break
-            fi
-          done
-
-          if [ -z "${IMG_URL:-}" ]; then
-            echo "Could not resolve a working endpoint" >&2
-            exit 1
-          fi
-
-          if [[ "$IMG_URL" == *\?* ]]; then
-            IMG_URL="${IMG_URL}&timestamp=${TS}"
-          else
-            IMG_URL="${IMG_URL}?timestamp=${TS}"
-          fi
-          echo "Using IMG_URL=$IMG_URL"
-          echo "IMG_URL=$IMG_URL" >> $GITHUB_ENV
-          echo "OWNER=$OWNER" >> $GITHUB_ENV
-
-
-      - name: Ensure contrib section exists (auto-insert if missing)
-        run: |
           START="<!--START_SECTION:contrib-image-->"
           END="<!--END_SECTION:contrib-image-->"
-          HEADING_REGEX='^###[[:space:]]*(🗺️[[:space:]]*)?Contributions[[:space:]]*$'
+          TS="$(date -u +%Y%m%d%H%M%S)"
 
           if [ ! -f README.md ]; then
-            echo "README.md not found. Creating a new one."
             touch README.md
           fi
 
-          if grep -q "$START" README.md && grep -q "$END" README.md; then
-            echo "Markers already present."
-            exit 0
-          fi
-
-          # Try to insert after an existing Contributions heading
-          if awk -v start="$START" -v end="$END" -v re="$HEADING_REGEX" '
-              BEGIN{inserted=0}
-              {
-                print $0
-                if ($0 ~ re && inserted==0) {
-                  print ""
-                  print start
-                  print "<!-- The action will replace this line with the generated image -->"
-                  print end
-                  print ""
-                  inserted=1
-                }
-              }
-              END{ if (inserted==0) exit 1 }
-            ' README.md > README.md.new
-          then
-            mv README.md.new README.md
-            echo "Inserted markers under existing Contributions heading."
-          else
-            # Append a heading + markers at end if no heading matched
+          if ! grep -q "$START" README.md; then
             {
               echo ""
               echo "### 🗺️ Contributions"
@@ -100,34 +112,8 @@ jobs:
               echo "$END"
               echo ""
             } >> README.md
-            echo "Appended Contributions section with markers at end of file."
           fi
 
-      - name: Update image between markers
-        run: |
-          START="<!--START_SECTION:contrib-image-->"
-          END="<!--END_SECTION:contrib-image-->"
-          NEW_CONTENT="${START}\n[![${OWNER}'s contribution graph](${IMG_URL})](${IMG_URL})\n${END}"
+          NEW_CONTENT="${START}\n<img src=\"contrib.svg?ts=${TS}\" alt=\"Contributions\" />\n${END}"
 
-          awk -v start="$START" -v end="$END" -v repl="$NEW_CONTENT" '
-            BEGIN{inblock=0}
-            {
-              if ($0 ~ start) {print repl; inblock=1; next}
-              if ($0 ~ end && inblock==1) {inblock=0; next}
-              if (inblock==0) print
-            }
-          ' README.md > README.md.new
-
-          mv README.md.new README.md
-
-      - name: Commit changes (if any)
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet; then
-            git add README.md
-            git commit -m "chore: update contributions image"
-            git push
-          else
-            echo "No changes to commit."
-          fi
+          awk -v start="$START" -v end=
