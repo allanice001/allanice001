@@ -86,10 +86,10 @@ jobs:
 
           node script.mjs
 
-      - name: Ensure contrib markers exist, then inject image (Node)
+      - name: Ensure contrib markers exist, then inject image (Node, CommonJS)
         run: |
           node <<'EOF'
-          import fs from 'node:fs';
+          const fs = require('fs');
 
           const START = '<!--START_SECTION:contrib-image-->';
           const END   = '<!--END_SECTION:contrib-image-->';
@@ -116,6 +116,11 @@ ${snippet}
           }
 
           fs.writeFileSync('README.md', readme);
+
+          // Debug summary
+          const svgSize = fs.existsSync('contrib.svg') ? fs.statSync('contrib.svg').size : 0;
+          const mdSize  = fs.existsSync('README.md') ? fs.statSync('README.md').size : 0;
+          console.log(`Wrote contrib.svg (${svgSize} bytes), README.md (${mdSize} bytes)`);
           EOF
 
       - name: Commit changes (if any)
