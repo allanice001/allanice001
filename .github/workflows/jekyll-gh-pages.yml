@@ -1,4 +1,4 @@
-name: Pages: README as homepage
+name: Pages README as homepage
 
 on:
   push:
