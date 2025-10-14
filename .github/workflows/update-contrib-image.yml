@@ -14,126 +14,104 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # Generate SVG with GitHub GraphQL (no external service)
+      - name: Generate contrib.svg
+        uses: actions/github-script@v7
         with:
-          node-version: 20
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
 
-      - name: Generate SVG from GitHub GraphQL
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          USERNAME: ${{ github.repository_owner }}
-        run: |
-          set -euo pipefail
-          cat > script.mjs << 'EOF'
-import fs from 'node:fs/promises';
+            const query = `
+            query($login:String!) {
+              user(login:$login) {
+                contributionsCollection {
+                  contributionCalendar {
+                    totalContributions
+                    weeks {
+                      contributionDays { color contributionCount date }
+                    }
+                  }
+                }
+              }
+            }`;
 
-const query = `
-query($login:String!) {
-  user(login:$login) {
-    contributionsCollection {
-      contributionCalendar {
-        totalContributions
-        weeks {
-          contributionDays { color contributionCount date }
-        }
-      }
-    }
-  }
-}`;
+            const { user } = await github.graphql(query, {
+              login: context.repo.owner
+            });
 
-const resp = await fetch('https://api.github.com/graphql', {
-  method: 'POST',
-  headers: {
-    'Authorization': `bearer ${process.env.GH_TOKEN}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ query, variables: { login: process.env.USERNAME }})
-});
+            const weeks = user.contributionsCollection.contributionCalendar.weeks || [];
 
-if (!resp.ok) {
-  const text = await resp.text();
-  throw new Error(`GraphQL HTTP ${resp.status}: ${text}`);
-}
-const json = await resp.json();
-if (json.errors) throw new Error(JSON.stringify(json.errors, null, 2));
+            // --- Simple GitHub-like heatmap SVG ---
+            const CELL = 11, GAP = 2;
+            const cols = weeks.length, rows = 7;
+            const width = cols * (CELL + GAP) + GAP;
+            const height = rows * (CELL + GAP) + GAP;
 
-const weeks = json.data.user.contributionsCollection.contributionCalendar.weeks;
+            const rects = [];
+            weeks.forEach((w, x) => {
+              (w.contributionDays || []).forEach((d, y) => {
+                const cx = GAP + x * (CELL + GAP);
+                const cy = GAP + y * (CELL + GAP);
+                const color = d.color || '#ebedf0';
+                rects.push(
+                  `<rect x="${cx}" y="${cy}" width="${CELL}" height="${CELL}" rx="2" ry="2" fill="${color}"><title>${d.date}: ${d.contributionCount} contributions</title></rect>`
+                );
+              });
+            });
 
-// --- SVG layout ---
-const CELL = 11, GAP = 2;
-const cols = weeks.length, rows = 7;
-const width = cols * (CELL + GAP) + GAP;
-const height = rows * (CELL + GAP) + GAP;
+            const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+              <rect width="100%" height="100%" fill="transparent"/>
+              ${rects.join('\n')}
+            </svg>`.trim();
 
-const rects = [];
-weeks.forEach((w, x) => {
-  w.contributionDays.forEach((d, y) => {
-    const cx = GAP + x * (CELL + GAP);
-    const cy = GAP + y * (CELL + GAP);
-    const color = d.color || '#ebedf0';
-    rects.push(
-      `<rect x="${cx}" y="${cy}" width="${CELL}" height="${CELL}" rx="2" ry="2" fill="${color}"><title>${d.date}: ${d.contributionCount} contributions</title></rect>`
-    );
-  });
-});
+            fs.writeFileSync('contrib.svg', svg, 'utf8');
+            core.info(`contrib.svg written (${Buffer.byteLength(svg, 'utf8')} bytes)`);
 
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <rect width="100%" height="100%" fill="transparent"/>
-  ${rects.join('\n')}
-</svg>`.trim();
+      # Ensure markers exist and inject <img src="contrib.svg?...">
+      - name: Inject image into README
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
 
-await fs.writeFile('contrib.svg', svg, 'utf8');
-EOF
+            const START = '<!--START_SECTION:contrib-image-->';
+            const END   = '<!--END_SECTION:contrib-image-->';
+            const ts = new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14);
 
-          node script.mjs
+            const snippet = `${START}
+            <img src="contrib.svg?ts=${ts}" alt="Contributions" />
+            ${END}`;
 
-      - name: Ensure contrib markers exist, then inject image (Node, CommonJS)
-        run: |
-          set -euo pipefail
-          node <<'EOF'
-const fs = require('fs');
+            let readme = '';
+            try { readme = fs.readFileSync('README.md', 'utf8'); } catch {}
+            if (!readme) readme = '';
 
-const START = '<!--START_SECTION:contrib-image-->';
-const END   = '<!--END_SECTION:contrib-image-->';
-const ts = new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14);
+            if (!readme.includes(START) || !readme.includes(END)) {
+              readme += `
 
-const snippet = `${START}
-<img src="contrib.svg?ts=${ts}" alt="Contributions" />
-${END}`;
+            ### 🗺️ Contributions
 
-let readme = '';
-try { readme = fs.readFileSync('README.md', 'utf8'); } catch {}
-if (!readme) readme = '';
+            ${snippet}
 
-if (!readme.includes(START) || !readme.includes(END)) {
-  readme += `
+            `;
+            } else {
+              const pattern = new RegExp(`${START}[\\s\\S]*?${END}`, 'm');
+              readme = readme.replace(pattern, snippet);
+            }
 
-### 🗺️ Contributions
-
-${snippet}
-
-`;
-} else {
-  const pattern = new RegExp(`${START}[\\s\\S]*?${END}`, 'm');
-  readme = readme.replace(pattern, snippet);
-}
-
-fs.writeFileSync('README.md', readme);
-
-// Debug summary
-const svgSize = fs.existsSync('contrib.svg') ? fs.statSync('contrib.svg').size : 0;
-const mdSize  = fs.existsSync('README.md') ? fs.statSync('README.md').size : 0;
-console.log(`Wrote contrib.svg (${svgSize} bytes), README.md (${mdSize} bytes)`);
-EOF
+            fs.writeFileSync('README.md', readme, 'utf8');
+            core.info(`README updated (size: ${fs.statSync('README.md').size} bytes)`);
 
       - name: Commit changes (if any)
         run: |
-          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if ! git diff --quiet; then
             git add README.md contrib.svg
-            git commit -m "chore: update contributions (GraphQL, Node injector)"
+            git commit -m "chore: update contributions (GraphQL via github-script)"
             git push
           else
             echo "No changes to commit."
