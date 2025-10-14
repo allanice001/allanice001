@@ -23,108 +23,112 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           USERNAME: ${{ github.repository_owner }}
         run: |
+          set -euo pipefail
           cat > script.mjs << 'EOF'
-          import fs from 'node:fs/promises';
+import fs from 'node:fs/promises';
 
-          const query = `
-          query($login:String!) {
-            user(login:$login) {
-              contributionsCollection {
-                contributionCalendar {
-                  totalContributions
-                  weeks {
-                    contributionDays { color contributionCount date }
-                  }
-                }
-              }
-            }
-          }`;
+const query = `
+query($login:String!) {
+  user(login:$login) {
+    contributionsCollection {
+      contributionCalendar {
+        totalContributions
+        weeks {
+          contributionDays { color contributionCount date }
+        }
+      }
+    }
+  }
+}`;
 
-          const resp = await fetch('https://api.github.com/graphql', {
-            method: 'POST',
-            headers: {
-              'Authorization': `bearer ${process.env.GH_TOKEN}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ query, variables: { login: process.env.USERNAME }})
-          });
+const resp = await fetch('https://api.github.com/graphql', {
+  method: 'POST',
+  headers: {
+    'Authorization': `bearer ${process.env.GH_TOKEN}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ query, variables: { login: process.env.USERNAME }})
+});
 
-          if (!resp.ok) {
-            const text = await resp.text();
-            throw new Error(\`GraphQL HTTP \${resp.status}: \${text}\`);
-          }
-          const json = await resp.json();
-          if (json.errors) throw new Error(JSON.stringify(json.errors, null, 2));
+if (!resp.ok) {
+  const text = await resp.text();
+  throw new Error(`GraphQL HTTP ${resp.status}: ${text}`);
+}
+const json = await resp.json();
+if (json.errors) throw new Error(JSON.stringify(json.errors, null, 2));
 
-          const weeks = json.data.user.contributionsCollection.contributionCalendar.weeks;
+const weeks = json.data.user.contributionsCollection.contributionCalendar.weeks;
 
-          // SVG layout
-          const CELL = 11, GAP = 2;
-          const cols = weeks.length, rows = 7;
-          const width = cols * (CELL + GAP) + GAP;
-          const height = rows * (CELL + GAP) + GAP;
+// --- SVG layout ---
+const CELL = 11, GAP = 2;
+const cols = weeks.length, rows = 7;
+const width = cols * (CELL + GAP) + GAP;
+const height = rows * (CELL + GAP) + GAP;
 
-          const rects = [];
-          weeks.forEach((w, x) => {
-            w.contributionDays.forEach((d, y) => {
-              const cx = GAP + x * (CELL + GAP);
-              const cy = GAP + y * (CELL + GAP);
-              const color = d.color || '#ebedf0';
-              rects.push(
-                \`<rect x="\${cx}" y="\${cy}" width="\${CELL}" height="\${CELL}" rx="2" ry="2" fill="\${color}"><title>\${d.date}: \${d.contributionCount} contributions</title></rect>\`
-              );
-            });
-          });
+const rects = [];
+weeks.forEach((w, x) => {
+  w.contributionDays.forEach((d, y) => {
+    const cx = GAP + x * (CELL + GAP);
+    const cy = GAP + y * (CELL + GAP);
+    const color = d.color || '#ebedf0';
+    rects.push(
+      `<rect x="${cx}" y="${cy}" width="${CELL}" height="${CELL}" rx="2" ry="2" fill="${color}"><title>${d.date}: ${d.contributionCount} contributions</title></rect>`
+    );
+  });
+});
 
-          const svg = \`<svg xmlns="http://www.w3.org/2000/svg" width="\${width}" height="\${height}" viewBox="0 0 \${width} \${height}">
-            <rect width="100%" height="100%" fill="transparent"/>
-            \${rects.join('\\n')}
-          </svg>\`.trim();
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="100%" height="100%" fill="transparent"/>
+  ${rects.join('\n')}
+</svg>`.trim();
 
-          await fs.writeFile('contrib.svg', svg, 'utf8');
-          EOF
+await fs.writeFile('contrib.svg', svg, 'utf8');
+EOF
 
           node script.mjs
 
       - name: Ensure contrib markers exist, then inject image (Node, CommonJS)
         run: |
+          set -euo pipefail
           node <<'EOF'
-          const fs = require('fs');
+const fs = require('fs');
 
-          const START = '<!--START_SECTION:contrib-image-->';
-          const END   = '<!--END_SECTION:contrib-image-->';
-          const ts = new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14);
-          const snippet = `${START}
-          <img src="contrib.svg?ts=${ts}" alt="Contributions" />
-          ${END}`;
+const START = '<!--START_SECTION:contrib-image-->';
+const END   = '<!--END_SECTION:contrib-image-->';
+const ts = new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14);
 
-          let readme = '';
-          try { readme = fs.readFileSync('README.md', 'utf8'); } catch {}
-          if (!readme) readme = '';
+const snippet = `${START}
+<img src="contrib.svg?ts=${ts}" alt="Contributions" />
+${END}`;
 
-          if (!readme.includes(START) || !readme.includes(END)) {
-            readme += `
+let readme = '';
+try { readme = fs.readFileSync('README.md', 'utf8'); } catch {}
+if (!readme) readme = '';
 
-          ### 🗺️ Contributions
+if (!readme.includes(START) || !readme.includes(END)) {
+  readme += `
 
-          ${snippet}
+### 🗺️ Contributions
 
-          `;
-          } else {
-            const pattern = new RegExp(`${START}[\\s\\S]*?${END}`, 'm');
-            readme = readme.replace(pattern, snippet);
-          }
+${snippet}
 
-          fs.writeFileSync('README.md', readme);
+`;
+} else {
+  const pattern = new RegExp(`${START}[\\s\\S]*?${END}`, 'm');
+  readme = readme.replace(pattern, snippet);
+}
 
-          // Debug summary
-          const svgSize = fs.existsSync('contrib.svg') ? fs.statSync('contrib.svg').size : 0;
-          const mdSize  = fs.existsSync('README.md') ? fs.statSync('README.md').size : 0;
-          console.log(`Wrote contrib.svg (${svgSize} bytes), README.md (${mdSize} bytes)`);
-          EOF
+fs.writeFileSync('README.md', readme);
+
+// Debug summary
+const svgSize = fs.existsSync('contrib.svg') ? fs.statSync('contrib.svg').size : 0;
+const mdSize  = fs.existsSync('README.md') ? fs.statSync('README.md').size : 0;
+console.log(`Wrote contrib.svg (${svgSize} bytes), README.md (${mdSize} bytes)`);
+EOF
 
       - name: Commit changes (if any)
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if ! git diff --quiet; then
