@@ -55,3 +55,79 @@ jobs:
           }
           const json = await resp.json();
           if (json.errors) throw new Error(JSON.stringify(json.errors, null, 2));
+
+          const weeks = json.data.user.contributionsCollection.contributionCalendar.weeks;
+
+          // SVG layout
+          const CELL = 11, GAP = 2;
+          const cols = weeks.length, rows = 7;
+          const width = cols * (CELL + GAP) + GAP;
+          const height = rows * (CELL + GAP) + GAP;
+
+          const rects = [];
+          weeks.forEach((w, x) => {
+            w.contributionDays.forEach((d, y) => {
+              const cx = GAP + x * (CELL + GAP);
+              const cy = GAP + y * (CELL + GAP);
+              const color = d.color || '#ebedf0';
+              rects.push(
+                `<rect x="${cx}" y="${cy}" width="${CELL}" height="${CELL}" rx="2" ry="2" fill="${color}"><title>${d.date}: ${d.contributionCount} contributions</title></rect>`
+              );
+            });
+          });
+
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+            <rect width="100%" height="100%" fill="transparent"/>
+            ${rects.join('\n')}
+          </svg>`.trim();
+
+          await fs.writeFile('contrib.svg', svg, 'utf8');
+          EOF
+
+          node script.mjs
+
+      - name: Ensure contrib markers exist, then inject image (Node, no awk)
+        run: |
+          node <<'EOF'
+          import fs from 'node:fs';
+
+          const START = '<!--START_SECTION:contrib-image-->';
+          const END   = '<!--END_SECTION:contrib-image-->';
+          const ts = new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14); // yyyymmddHHMMSS
+          const snippet = `${START}
+<img src="contrib.svg?ts=${ts}" alt="Contributions" />
+${END}`;
+
+          let readme = '';
+          try { readme = fs.readFileSync('README.md', 'utf8'); } catch {}
+          if (!readme) readme = '';
+
+          if (!readme.includes(START) || !readme.includes(END)) {
+            // Append a Contributions section with markers if missing
+            readme += `
+
+### 🗺️ Contributions
+
+${snippet}
+
+`;
+          } else {
+            // Replace the whole block between markers (inclusive)
+            const pattern = new RegExp(`${START}[\\s\\S]*?${END}`, 'm');
+            readme = readme.replace(pattern, snippet);
+          }
+
+          fs.writeFileSync('README.md', readme);
+          EOF
+
+      - name: Commit changes (if any)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add README.md contrib.svg
+            git commit -m "chore: update contributions (GraphQL, Node injector)"
+            git push
+          else
+            echo "No changes to commit."
+          fi
