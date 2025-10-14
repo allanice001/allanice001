@@ -16,7 +16,7 @@ jobs:
 
       # Generate SVG with GitHub GraphQL (no external service)
       - name: Generate contrib.svg
-        uses: actions/github-script@v7
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -71,7 +71,7 @@ jobs:
 
       # Ensure markers exist and inject <img src="contrib.svg?...">
       - name: Inject image into README
-        uses: actions/github-script@v7
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
