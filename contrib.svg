@@ -172,7 +172,7 @@
 <rect x="314" y="15" width="11" height="11" rx="2" ry="2" fill="#ebedf0"><title>2025-04-07: 0 contributions</title></rect>
 <rect x="314" y="28" width="11" height="11" rx="2" ry="2" fill="#9be9a8"><title>2025-04-08: 1 contributions</title></rect>
 <rect x="314" y="41" width="11" height="11" rx="2" ry="2" fill="#9be9a8"><title>2025-04-09: 7 contributions</title></rect>
-<rect x="314" y="54" width="11" height="11" rx="2" ry="2" fill="#9be9a8"><title>2025-04-10: 1 contributions</title></rect>
+<rect x="314" y="54" width="11" height="11" rx="2" ry="2" fill="#ebedf0"><title>2025-04-10: 0 contributions</title></rect>
 <rect x="314" y="67" width="11" height="11" rx="2" ry="2" fill="#9be9a8"><title>2025-04-11: 1 contributions</title></rect>
 <rect x="314" y="80" width="11" height="11" rx="2" ry="2" fill="#9be9a8"><title>2025-04-12: 10 contributions</title></rect>
 <rect x="327" y="2" width="11" height="11" rx="2" ry="2" fill="#9be9a8"><title>2025-04-13: 8 contributions</title></rect>
@@ -366,5 +366,6 @@
 <rect x="665" y="80" width="11" height="11" rx="2" ry="2" fill="#ebedf0"><title>2025-10-18: 0 contributions</title></rect>
 <rect x="678" y="2" width="11" height="11" rx="2" ry="2" fill="#ebedf0"><title>2025-10-19: 0 contributions</title></rect>
 <rect x="678" y="15" width="11" height="11" rx="2" ry="2" fill="#9be9a8"><title>2025-10-20: 5 contributions</title></rect>
-<rect x="678" y="28" width="11" height="11" rx="2" ry="2" fill="#9be9a8"><title>2025-10-21: 9 contributions</title></rect>
+<rect x="678" y="28" width="11" height="11" rx="2" ry="2" fill="#40c463"><title>2025-10-21: 15 contributions</title></rect>
+<rect x="678" y="41" width="11" height="11" rx="2" ry="2" fill="#40c463"><title>2025-10-22: 17 contributions</title></rect>
 </svg>
